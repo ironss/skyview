@@ -1,0 +1,78 @@
+#! /home/stephen/workspace-iotec/tooling/satellite-prediction/.venv/bin/python3
+
+# Munin plugin to calculate moon phase and illumination
+
+import os
+import sys
+import time
+import datetime
+
+import skyfield.api
+import skyfield.almanac
+import skyfield_data
+
+
+with_moon_phase = True
+
+verbose = True if os.getenv('MUNIN_DEBUG') == '1' else False
+def verboselog(s):
+    if verbose:
+        sys.stderr.write('{}: {}\n'.format(plugin_name, s))
+
+
+def fetch():
+    # Adapted from https://rhodesmill.org/skyfield/examples.html#what-phase-is-the-moon-tonight
+
+    tsc = skyfield.api.load.timescale()
+    load = skyfield.api.Loader(skyfield_data.get_skyfield_data_path())
+    eph = load('de421.bsp')   # This gives positions of the planets, etc
+
+    tnow_ts = tsc.now()
+    tnow = int(time.time())
+
+    earth = eph['earth']
+    sun = eph['sun']
+    moon = eph['moon']
+
+    # Include this on all graphs, even though it is the same all over the world
+    e = earth.at(tnow_ts)
+    s = e.observe(sun).apparent()
+    m = e.observe(moon).apparent()
+
+    _, slon, _ = s.frame_latlon(skyfield.framelib.ecliptic_frame)
+    _, mlon, _ = m.frame_latlon(skyfield.framelib.ecliptic_frame)
+    
+    phase = ((mlon.degrees - slon.degrees) % 360.0) / 360 * 100
+    illumination = 100 * m.fraction_illuminated(sun)
+
+    print("moon_phase.value {:0.1f}".format(phase))
+    print("moon_illumination.value {:0.1f}".format(illumination))
+
+    
+def config():
+    print("host_name worldwide.place")
+    print("graph_title Moon details")
+    print("graph_category astro")
+    print("graph_args --lower-limit 0 --upper-limit 100 --rigid")
+    print("graph_vlabel %")
+
+    print("moon_phase.label Moon phase (%)")
+    print("moon_illumination.label Moon illumination (%)")
+
+
+if len(sys.argv) > 1:
+    cmd = sys.argv[1]
+    if cmd == 'config':
+        config()
+        if True:  # if we support dirtyconfig
+            fetch()
+        sys.exit(0)
+
+    if cmd == 'suggest':
+        sys.exit(0)
+
+    verboselog('unknown argument "{}"'.format(cmd))
+    exit(1)
+
+fetch()
+
