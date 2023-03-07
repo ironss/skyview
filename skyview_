@@ -10,6 +10,7 @@
 # Also copies the moon phase and illumination from the worldwide.global moon data
 
 
+import json
 import os
 import sys
 import time
@@ -39,7 +40,7 @@ Satellite data from Celestrak
 """
 
 
-tle_dir = '/var/lib/munin/skyview/.tle/'
+tle_dir = '/var/lib/munin/skyview/tle/'
 tle_urls = [
     'http://www.celestrak.com/NORAD/elements/active.txt',
     # 'http://www.celestrak.com/NORAD/elements/tle-new.txt',
@@ -79,13 +80,12 @@ def _loadsats():
     return all_sats
 
 
-def fetch(location_name):
+def fetch(hostname, location):
     tsc = skyfield.api.load.timescale()
     load = skyfield.api.Loader(skyfield_data.get_skyfield_data_path(), verbose=False)
     eph = load('de421.bsp')   # This gives positions of the planets, etc
 
-    loc_data = locations[location_name]
-    loc = skyfield.api.Topos(latitude_degrees=loc_data[0], longitude_degrees=loc_data[1], elevation_m=loc_data[2])
+    loc = skyfield.api.Topos(latitude_degrees=location['lat'], longitude_degrees=location['lon'], elevation_m=location['alt'])
 
     tnow_ts = tsc.now()
     tnow = int(time.time())
@@ -140,8 +140,8 @@ def fetch(location_name):
     print()
     
     
-def config(location_name):
-    print("host_name {}".format(location_name))
+def config(hostname, location):
+    print("host_name {}".format(hostname))
     print()
     print("multigraph skyview_satellite_altitudes")
     print("graph_title Satellite altitudes")
@@ -187,15 +187,12 @@ def config(location_name):
     print()
     
 
-_, location_name = sys.argv[0].split('_')
-
-
 if len(sys.argv) > 1:
     cmd = sys.argv[1]
     if cmd == 'config':
-        config(location_name)
+        config(hostname, location)
         if True:  # if we support dirtyconfig
-            fetch(location_name)
+            fetch(hostname, location)
         sys.exit(0)
 
     if cmd == 'suggest':
@@ -204,5 +201,5 @@ if len(sys.argv) > 1:
     verboselog('unknown argument "{}"'.format(cmd))
     exit(1)
 
-fetch(location_name)
+fetch(hostname, location)
 
