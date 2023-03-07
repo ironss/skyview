@@ -26,17 +26,17 @@ def verboselog(s):
         sys.stderr.write('{}: {}\n'.format(plugin_name, s))
 
 
-locations = {
-    'Christchurch.nz.place'  : ( -43.4821,  172.5500,   37),
-    'Lyttelton.nz.place'     : ( -43.6000,  172.7200,    0),
-    'Nelson.nz.place'        : ( -41.2980,  173.2210,    5),
-    'Scott-Base.nz.place'    : ( -77.8491,  166.7682,   10),
+locations_fn = os.getenv('WEATHER_LOCATIONS')
+with open(locations_fn) as f:
+    locations = json.load(f)
 
-    'SANAE4.za.place'        : ( -71.6724,   -2.8249,  850),
+plugin_name = os.path.basename(sys.argv[0])
+script_name, hostname = plugin_name.split('_')
+location = locations[hostname]
 
-    'Wichita.ka.us.place'    : (  37.6889,  -97.3361,  400),
-    'Amundsen-Scott.us.place': ( -90.0000,    0.0000, 2835),
-}
+attribution = """Astronomical calculations by Skyfield
+Satellite data from Celestrak 
+"""
 
 
 tle_dir = '/var/lib/munin/skyview/.tle/'
