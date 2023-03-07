@@ -1,6 +1,3 @@
 skyfield
 skyfield-data
-matplotlib
-natsort
-python-dateutil
 
