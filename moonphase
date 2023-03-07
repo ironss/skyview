@@ -1,4 +1,4 @@
-#! /home/stephen/workspace-iotec/tooling/satellite-prediction/.venv/bin/python3
+#! /home/stephen/workspace-stephen/skyview/.venv/bin/python3
 
 # Munin plugin to calculate moon phase and illumination
 
