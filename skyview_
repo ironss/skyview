@@ -1,0 +1,208 @@
+#! /home/stephen/workspace-iotec/tooling/satellite-prediction/.venv/bin/python3
+
+# Munin plugin to calculate satellite altitudes
+#
+# * Altitude of the highest Swarm satellite
+# * ISS and HST
+# * any other satellites?
+# 
+# Also calculates the altitude of the sun and moon
+# Also copies the moon phase and illumination from the worldwide.global moon data
+
+
+import os
+import sys
+import time
+import datetime
+
+import skyfield.api
+import skyfield.almanac
+import skyfield_data
+
+
+verbose = True if os.getenv('MUNIN_DEBUG') == '1' else False
+def verboselog(s):
+    if verbose:
+        sys.stderr.write('{}: {}\n'.format(plugin_name, s))
+
+
+locations = {
+    'Christchurch.nz.place'  : ( -43.4821,  172.5500,   37),
+    'Lyttelton.nz.place'     : ( -43.6000,  172.7200,    0),
+    'Nelson.nz.place'        : ( -41.2980,  173.2210,    5),
+    'Scott-Base.nz.place'    : ( -77.8491,  166.7682,   10),
+
+    'SANAE4.za.place'        : ( -71.6724,   -2.8249,  850),
+
+    'Wichita.ka.us.place'    : (  37.6889,  -97.3361,  400),
+    'Amundsen-Scott.us.place': ( -90.0000,    0.0000, 2835),
+}
+
+
+tle_dir = '/var/lib/munin/skyview/.tle/'
+tle_urls = [
+    'http://www.celestrak.com/NORAD/elements/active.txt',
+    # 'http://www.celestrak.com/NORAD/elements/tle-new.txt',
+    # 'http://www.celestrak.com/NORAD/elements/visible.txt',
+]
+
+swarm_satnames = [
+    'SPACEBEE-{}'.format(i) for i in range(10, 167 + 1)
+] + [
+    'SPACEBEENZ-{}'.format(i) for i in range(1, 22 + 1)
+]
+
+other_satnames = [
+    'ISS (ZARYA)',
+    'HST',
+]
+
+
+def _loadsats():
+    os.makedirs(tle_dir, exist_ok=True)
+    all_sats = []
+    for tle_url in tle_urls:
+        _, tle_fn = os.path.split(tle_url)
+        tle_path = os.path.join(tle_dir, tle_fn)
+
+        try:
+            mtime = os.path.getmtime(tle_path)
+        except FileNotFoundError:
+            mtime = 0
+        age = time.time() - mtime
+        reload = age > 86400   # Reload if the file is over 24 hours old
+
+        load = skyfield.api.Loader('.', verbose=False)
+        sats_ = load.tle_file(tle_url, filename=tle_path, reload=reload)
+        all_sats += sats_
+
+    return all_sats
+
+
+def fetch(location_name):
+    tsc = skyfield.api.load.timescale()
+    load = skyfield.api.Loader(skyfield_data.get_skyfield_data_path(), verbose=False)
+    eph = load('de421.bsp')   # This gives positions of the planets, etc
+
+    loc_data = locations[location_name]
+    loc = skyfield.api.Topos(latitude_degrees=loc_data[0], longitude_degrees=loc_data[1], elevation_m=loc_data[2])
+
+    tnow_ts = tsc.now()
+    tnow = int(time.time())
+    #timestamps = tsc.from_datetimes([ datetime.datetime.fromtimestamp(tnow-t*60, tz=datetime.timezone.utc) for t in range(-4, 1, 1)])
+
+    sats = _loadsats()
+    alt_max = -90
+
+    for sat in sats:
+        if sat.name not in swarm_satnames:
+            continue
+
+        sat_from_loc = sat - loc
+
+        alt = sat_from_loc.at(tnow_ts).altaz()[0].degrees
+        #alts = [ dd.altaz()[0].degrees for dd in sat_from_loc.at(timestamps) ]
+        #alt = max(alts)
+        alt_max = max(alt_max, alt)
+
+    print("multigraph skyview_satellite_altitudes")
+    print("swarm_max_altitude.value {:0.1f}".format(alt_max))
+
+    for n, satname in enumerate(other_satnames):
+        try:
+            sat = [ s for s in sats if s.name == satname ][0]
+        except KeyError:
+            continue
+
+        sat_from_loc = sat - loc
+
+        alt = sat_from_loc.at(tnow_ts).altaz()[0].degrees
+        #alts = [ dd.altaz()[0].degrees for dd in sat_from_loc.at(timestamps) ]
+        #alt = max(alts)
+
+        print("sat_{}_altitude.value {:0.1f}".format(n, alt))
+
+    print()
+
+    earth = eph['earth']
+    sun = eph['sun']
+    moon = eph['moon']
+
+    sun_from_loc = sun - (earth + loc)
+    alt_sun = sun_from_loc.at(tnow_ts).altaz()[0].degrees
+
+    moon_from_loc = moon - (earth + loc)
+    alt_moon = moon_from_loc.at(tnow_ts).altaz()[0].degrees
+
+    print("multigraph skyview_astronomical_altitudes")
+    print("sun_altitude.value {:0.1f}".format(alt_sun))
+    print("moon_altitude.value {:0.1f}".format(alt_moon))
+    print()
+    
+    
+def config(location_name):
+    print("host_name {}".format(location_name))
+    print()
+    print("multigraph skyview_satellite_altitudes")
+    print("graph_title Satellite altitudes")
+    print("graph_category astro")
+    print("graph_args --lower-limit 0 --upper-limit 90 --rigid")
+    print("graph_vlabel Altitude (°)")
+    print()
+    print("swarm_max_altitude.label Swarm highest satellite altitude (°)")
+    for n, satname in enumerate(other_satnames):
+        print("sat_{}_altitude.label {} altitude (°)".format(n, satname))
+    print()
+    
+    print("multigraph skyview_astronomical_altitudes")
+    print("graph_title Astronomical altitudes")
+    print("graph_category astro")
+    print("graph_args --lower-limit 0 --upper-limit 90 --rigid")
+    print("graph_vlabel Altitude (°)")
+    print()
+    print("sun_altitude.label   Sun altitude (°)")
+    print("moon_altitude.label   Moon altitude (°)")
+    print()
+    
+    print("multigraph skyview_moon")
+    print("graph_title Moon details")
+    print("graph_category astro")
+    print("graph_args --lower-limit 0 --upper-limit 100 --rigid")
+    print("graph_vlabel %")
+    print("graph_order moon_phase=worldwide.place:moonphase.moon_phase moon_illumination=worldwide.place:moonphase.moon_illumination")
+    print()
+    print("moon_phase.label Moon phase (%)")
+    print("moon_illumination.label Moon illumination (%)")
+    print()
+    
+    print("multigraph skyview_Kp")
+    print("graph_title Kp index")
+    print("graph_category astro")
+    print("graph_vlabel Kp")
+    print("graph_args --lower-limit 0 --upper-limit 9 --rigid")
+    print("graph_order kp_forecast=worldwide.place:kp_global.kp_forecast")
+    print()
+    print("kp_forecast.label Kp forecast")
+    print("kp_forecast.line 7")
+    print()
+    
+
+_, location_name = sys.argv[0].split('_')
+
+
+if len(sys.argv) > 1:
+    cmd = sys.argv[1]
+    if cmd == 'config':
+        config(location_name)
+        if True:  # if we support dirtyconfig
+            fetch(location_name)
+        sys.exit(0)
+
+    if cmd == 'suggest':
+        sys.exit(0)
+
+    verboselog('unknown argument "{}"'.format(cmd))
+    exit(1)
+
+fetch(location_name)
+
