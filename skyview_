@@ -5,7 +5,7 @@
 # * Altitude of the highest Swarm satellite
 # * ISS and HST
 # * any other satellites?
-# 
+#
 # Also calculates the altitude of the sun and moon
 # Also copies the moon phase and illumination from the worldwide.global moon data
 
@@ -36,7 +36,7 @@ script_name, hostname = plugin_name.split('_')
 location = locations[hostname]
 
 attribution = """Astronomical calculations by Skyfield
-Satellite data from Celestrak 
+Satellite data from Celestrak
 """
 
 
@@ -138,8 +138,8 @@ def fetch(hostname, location):
     print("sun_altitude.value {:0.1f}".format(alt_sun))
     print("moon_altitude.value {:0.1f}".format(alt_moon))
     print()
-    
-    
+
+
 def config(hostname, location):
     print("host_name {}".format(hostname))
     print()
@@ -153,7 +153,7 @@ def config(hostname, location):
     for n, satname in enumerate(other_satnames):
         print("sat_{}_altitude.label {} altitude (°)".format(n, satname))
     print()
-    
+
     print("multigraph skyview_astronomical_altitudes")
     print("graph_title Astronomical altitudes")
     print("graph_category astro")
@@ -163,7 +163,7 @@ def config(hostname, location):
     print("sun_altitude.label   Sun altitude (°)")
     print("moon_altitude.label   Moon altitude (°)")
     print()
-    
+
     print("multigraph skyview_moon")
     print("graph_title Moon details")
     print("graph_category astro")
@@ -174,7 +174,7 @@ def config(hostname, location):
     print("moon_phase.label Moon phase (%)")
     print("moon_illumination.label Moon illumination (%)")
     print()
-    
+
     print("multigraph skyview_Kp")
     print("graph_title Kp index")
     print("graph_category astro")
@@ -185,7 +185,7 @@ def config(hostname, location):
     print("kp_forecast.label Kp forecast")
     print("kp_forecast.line 7")
     print()
-    
+
 
 if len(sys.argv) > 1:
     cmd = sys.argv[1]
